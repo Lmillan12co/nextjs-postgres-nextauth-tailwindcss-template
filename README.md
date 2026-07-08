@@ -1,64 +1,96 @@
-<div align="center"><strong>Next.js 15 Admin Dashboard Template</strong></div>
-<div align="center">Built with the Next.js App Router</div>
-<br />
-<div align="center">
-<a href="https://next-admin-dash.vercel.app/">Demo</a>
-<span> · </span>
-<a href="https://vercel.com/templates/next.js/admin-dashboard-tailwind-postgres-react-nextjs">Clone & Deploy</a>
-<span>
-</div>
+# Cobros LATAM
 
-## Overview
+Cobros LATAM es una plataforma base para cobrar facturas en México con Next.js, Node.js, PostgreSQL y Mercado Pago. Incluye dashboard web, autenticación con Auth.js, modelo de datos de clientes/facturas/pagos, endpoints de checkout y webhook, y una app móvil React Native de referencia para equipos de campo.
 
-This is a starter template using the following stack:
+## Stack
 
-- Framework - [Next.js (App Router)](https://nextjs.org)
-- Language - [TypeScript](https://www.typescriptlang.org)
-- Auth - [Auth.js](https://authjs.dev)
-- Database - [Postgres](https://vercel.com/postgres)
-- Deployment - [Vercel](https://vercel.com/docs/concepts/next.js/overview)
-- Styling - [Tailwind CSS](https://tailwindcss.com)
-- Components - [Shadcn UI](https://ui.shadcn.com/)
-- Analytics - [Vercel Analytics](https://vercel.com/analytics)
-- Formatting - [Prettier](https://prettier.io)
+- **Web / Backend:** Next.js 15 App Router, Node.js, TypeScript.
+- **UI:** React 19, Tailwind CSS, componentes shadcn/ui.
+- **Auth:** Auth.js / NextAuth con GitHub OAuth.
+- **Base de datos:** PostgreSQL con Drizzle ORM.
+- **Pagos:** Mercado Pago México mediante Checkout Pro y webhooks.
+- **Móvil:** React Native / Expo en `mobile/`.
 
-This template uses the new Next.js App Router. This includes support for enhanced layouts, colocation of components, tests, and styles, component-level data fetching, and more.
+## Variables de entorno
 
-## Getting Started
+Copia `.env.example` a `.env.local` y configura:
 
-During the deployment, Vercel will prompt you to create a new Postgres database. This will add the necessary environment variables to your project.
+```bash
+POSTGRES_URL=postgres://...
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+AUTH_SECRET=...
+AUTH_GITHUB_ID=...
+AUTH_GITHUB_SECRET=...
+MERCADO_PAGO_ACCESS_TOKEN=TEST-...
+```
 
-Inside the Vercel Postgres dashboard, create a table based on the schema defined in this repository.
+## Esquema SQL
 
 ```sql
-CREATE TYPE status AS ENUM ('active', 'inactive', 'archived');
+CREATE TYPE customer_status AS ENUM ('active', 'paused', 'delinquent');
+CREATE TYPE invoice_status AS ENUM ('draft', 'pending', 'paid', 'overdue', 'cancelled');
+CREATE TYPE payment_provider AS ENUM ('mercado_pago_mx', 'cash', 'bank_transfer');
 
-CREATE TABLE products (
+CREATE TABLE customers (
   id SERIAL PRIMARY KEY,
-  image_url TEXT NOT NULL,
-  name TEXT NOT NULL,
-  status status NOT NULL,
-  price NUMERIC(10, 2) NOT NULL,
-  stock INTEGER NOT NULL,
-  available_at TIMESTAMP NOT NULL
+  business_name TEXT NOT NULL,
+  contact_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  rfc TEXT,
+  country TEXT NOT NULL DEFAULT 'MX',
+  status customer_status NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE invoices (
+  id SERIAL PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  folio TEXT NOT NULL,
+  concept TEXT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'MXN',
+  subtotal NUMERIC(12, 2) NOT NULL,
+  tax NUMERIC(12, 2) NOT NULL,
+  total NUMERIC(12, 2) NOT NULL,
+  status invoice_status NOT NULL DEFAULT 'pending',
+  due_at TIMESTAMP NOT NULL,
+  paid_at TIMESTAMP,
+  mercado_pago_preference_id TEXT,
+  mercado_pago_init_point TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE payments (
+  id SERIAL PRIMARY KEY,
+  invoice_id INTEGER NOT NULL REFERENCES invoices(id),
+  provider payment_provider NOT NULL,
+  provider_payment_id TEXT,
+  amount NUMERIC(12, 2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'MXN',
+  status TEXT NOT NULL,
+  live_mode BOOLEAN NOT NULL DEFAULT false,
+  raw_payload TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
 
-Then, uncomment `app/api/seed.ts` and hit `http://localhost:3000/api/seed` to seed the database with products.
-
-Next, copy the `.env.example` file to `.env` and update the values. Follow the instructions in the `.env.example` file to set up your GitHub OAuth application.
-
-```bash
-npm i -g vercel
-vercel link
-vercel env pull
-```
-
-Finally, run the following commands to start the development server:
+## Desarrollo
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-You should now be able to access the application at http://localhost:3000.
+Para cargar datos demo, visita `http://localhost:3000/api/seed` después de crear el esquema.
+
+## Flujo Mercado Pago México
+
+1. Desde el dashboard, selecciona **Crear liga** en una factura pendiente.
+2. `GET /api/mercado-pago/preferences?invoiceId=ID` crea una preferencia Checkout Pro en MXN.
+3. Mercado Pago redirige al cliente a la liga de pago.
+4. `POST /api/mercado-pago/webhook` consulta el pago, registra la transacción y marca la factura como `paid` si el estado es `approved`.
+
+## App móvil
+
+La carpeta `mobile/` contiene una app Expo mínima para consultar cobros, abrir ligas de Mercado Pago y apoyar cobranza en ruta. Configura `EXPO_PUBLIC_API_URL` apuntando al despliegue web.

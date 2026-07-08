@@ -1,0 +1,22 @@
+{
+  "name": "cobros-latam-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "expo": "^53.0.0",
+    "expo-linking": "^7.1.0",
+    "react": "19.0.0",
+    "react-native": "^0.79.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "typescript": "5.7.2"
+  }
+}
